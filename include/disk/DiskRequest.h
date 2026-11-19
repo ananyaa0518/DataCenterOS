@@ -9,9 +9,7 @@ struct DiskRequest {
     int processId;
 
     DiskRequest(int id, int trackNumber, int pid)
-        : requestId(id),
-          track(trackNumber),
-          processId(pid) {}
+        : requestId(id), track(trackNumber), processId(pid) {}
 };
 
 }
