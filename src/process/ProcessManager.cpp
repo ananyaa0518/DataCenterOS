@@ -50,6 +50,10 @@ PCB* ProcessManager::getProcess(int pid) {
     return nullptr;
 }
 
+std::vector<PCB>& ProcessManager::getAllProcesses() {
+    return processTable;
+}
+
 const std::vector<PCB>& ProcessManager::getAllProcesses() const {
     return processTable;
 }
@@ -81,8 +85,35 @@ bool ProcessManager::terminateProcess(int pid) {
     return true;
 }
 
+void ProcessManager::resetProcesses() {
+    for (auto& process : processTable) {
+        process.remainingTime = process.burstTime;
+        process.state = ProcessState::READY;
+    }
+}
+
+void ProcessManager::clearProcesses() {
+    processTable.clear();
+    nextPID = 100;
+}
+
+static std::string processStateToString(ProcessState state) {
+    switch (state) {
+        case ProcessState::NEW: return "NEW";
+        case ProcessState::READY: return "READY";
+        case ProcessState::RUNNING: return "RUNNING";
+        case ProcessState::WAITING: return "WAITING";
+        case ProcessState::TERMINATED: return "TERMINATED";
+        default: return "UNKNOWN";
+    }
+}
+
 void ProcessManager::displayProcesses() const {
     std::cout << "\n========== PROCESS TABLE ==========\n";
+
+    if (processTable.empty()) {
+        std::cout << "No processes in table.\n";
+    }
 
     for (const auto& process : processTable) {
         std::cout << "PID: " << process.pid
@@ -91,10 +122,11 @@ void ProcessManager::displayProcesses() const {
                   << " | Burst: " << process.burstTime
                   << " | Remaining: " << process.remainingTime
                   << " | Priority: " << process.priority
+                  << " | State: " << processStateToString(process.state)
                   << "\n";
     }
 
-    std::cout << "================================\n";
+    std::cout << "===================================\n";
 }
 
 }

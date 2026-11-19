@@ -23,11 +23,17 @@ public:
 
     PCB* getProcess(int pid);
 
+    std::vector<PCB>& getAllProcesses();
+
     const std::vector<PCB>& getAllProcesses() const;
 
     bool updateState(int pid, ProcessState newState);
 
     bool terminateProcess(int pid);
+
+    void resetProcesses();
+
+    void clearProcesses();
 
     void displayProcesses() const;
 };

@@ -1,4 +1,5 @@
 #include "process/Scheduler.h"
+#include "process/ContextSwitch.h"
 
 #include <algorithm>
 #include <queue>
@@ -13,7 +14,22 @@ SchedulingResult Scheduler::FCFS(std::vector<PCB>& processes) {
         return result;
     }
 
-    // Sort processes by arrival time
+    // Prevent re-executing if all processes have already terminated
+    bool anyToRun = false;
+    for (const auto& process : processes) {
+        if (process.state != ProcessState::TERMINATED && process.remainingTime > 0) {
+            anyToRun = true;
+            break;
+        }
+    }
+
+    if (!anyToRun) {
+        std::cout << "All processes have already completed execution.\n"
+                  << "Please reset processes before running scheduling again.\n";
+        return result;
+    }
+
+    // Sort processes by arrival time, then PID
     std::sort(processes.begin(), processes.end(),
         [](const PCB& a, const PCB& b) {
             if (a.arrivalTime == b.arrivalTime) {
@@ -25,18 +41,29 @@ SchedulingResult Scheduler::FCFS(std::vector<PCB>& processes) {
     int currentTime = 0;
     double totalWaitingTime = 0;
     double totalTurnaroundTime = 0;
+    int scheduledCount = 0;
+
+    ContextSwitch contextSwitcher(1);
+    PCB* lastProcess = nullptr;
 
     for (auto& process : processes) {
+        if (process.state == ProcessState::TERMINATED || process.remainingTime <= 0) {
+            continue;
+        }
 
         // CPU remains idle if no process has arrived
         if (currentTime < process.arrivalTime) {
             currentTime = process.arrivalTime;
         }
 
-        process.state = ProcessState::RUNNING;
+        // Context switch when switching to a different process
+        if (lastProcess != nullptr && lastProcess->pid != process.pid) {
+            contextSwitcher.switchProcess(*lastProcess, process);
+        } else {
+            process.state = ProcessState::RUNNING;
+        }
 
         int waitingTime = currentTime - process.arrivalTime;
-
         currentTime += process.burstTime;
 
         int completionTime = currentTime;
@@ -47,17 +74,19 @@ SchedulingResult Scheduler::FCFS(std::vector<PCB>& processes) {
 
         totalWaitingTime += waitingTime;
         totalTurnaroundTime += turnaroundTime;
+        scheduledCount++;
 
         result.executionOrder.push_back(process.pid);
+        lastProcess = &process;
     }
 
-    result.averageWaitingTime =
-        totalWaitingTime / processes.size();
-
-    result.averageTurnaroundTime =
-        totalTurnaroundTime / processes.size();
+    if (scheduledCount > 0) {
+        result.averageWaitingTime = totalWaitingTime / scheduledCount;
+        result.averageTurnaroundTime = totalTurnaroundTime / scheduledCount;
+    }
 
     result.totalExecutionTime = currentTime;
+    result.contextSwitches = contextSwitcher.getTotalContextSwitches();
 
     return result;
 }
@@ -71,17 +100,32 @@ SchedulingResult Scheduler::RoundRobin(
 ) {
     SchedulingResult result;
 
-    if (processes.empty() || timeQuantum <= 0) {
+    if (processes.empty()) {
+        std::cout << "No processes to schedule.\n";
         return result;
     }
 
-    // Reset remaining time for a fresh simulation
-    for (auto& process : processes) {
-        process.remainingTime = process.burstTime;
-        process.state = ProcessState::READY;
+    if (timeQuantum <= 0) {
+        std::cout << "Invalid time quantum. Time quantum must be greater than 0.\n";
+        return result;
     }
 
-    // Sort by arrival time
+    // Prevent re-executing if all processes have already terminated
+    bool anyToRun = false;
+    for (const auto& process : processes) {
+        if (process.state != ProcessState::TERMINATED && process.remainingTime > 0) {
+            anyToRun = true;
+            break;
+        }
+    }
+
+    if (!anyToRun) {
+        std::cout << "All processes have already completed execution.\n"
+                  << "Please reset processes before running scheduling again.\n";
+        return result;
+    }
+
+    // Sort by arrival time, then PID
     std::sort(processes.begin(), processes.end(),
         [](const PCB& a, const PCB& b) {
             if (a.arrivalTime == b.arrivalTime) {
@@ -91,18 +135,25 @@ SchedulingResult Scheduler::RoundRobin(
         });
 
     std::queue<int> readyQueue;
-
     std::vector<int> completionTime(processes.size(), 0);
-    std::vector<int> firstResponseTime(processes.size(), -1);
 
     int currentTime = 0;
     int completed = 0;
     int nextProcess = 0;
 
-    // Add processes that have arrived at time 0
+    ContextSwitch contextSwitcher(1);
+    int lastRunningIndex = -1;
+
+    // Advance time to first process arrival if idle
+    if (nextProcess < static_cast<int>(processes.size()) &&
+        processes[nextProcess].arrivalTime > currentTime) {
+        currentTime = processes[nextProcess].arrivalTime;
+    }
+
+    // Add processes that have arrived at or before currentTime
     while (nextProcess < static_cast<int>(processes.size()) &&
            processes[nextProcess].arrivalTime <= currentTime) {
-
+        processes[nextProcess].state = ProcessState::READY;
         readyQueue.push(nextProcess);
         nextProcess++;
     }
@@ -111,18 +162,18 @@ SchedulingResult Scheduler::RoundRobin(
 
         // CPU idle if no process is ready
         if (readyQueue.empty()) {
-
             if (nextProcess < static_cast<int>(processes.size())) {
                 currentTime = processes[nextProcess].arrivalTime;
 
                 while (nextProcess < static_cast<int>(processes.size()) &&
                        processes[nextProcess].arrivalTime <= currentTime) {
-
+                    processes[nextProcess].state = ProcessState::READY;
                     readyQueue.push(nextProcess);
                     nextProcess++;
                 }
+            } else {
+                break;
             }
-
             continue;
         }
 
@@ -131,13 +182,13 @@ SchedulingResult Scheduler::RoundRobin(
 
         PCB& process = processes[index];
 
-        process.state = ProcessState::RUNNING;
-
-        // Calculate response time on first execution
-        if (firstResponseTime[index] == -1) {
-            firstResponseTime[index] =
-                currentTime - process.arrivalTime;
+        // Trigger context switch only when switching to a different process
+        if (lastRunningIndex != -1 && lastRunningIndex != index) {
+            contextSwitcher.switchProcess(processes[lastRunningIndex], process);
+        } else {
+            process.state = ProcessState::RUNNING;
         }
+        lastRunningIndex = index;
 
         // Run process for quantum or until it finishes
         int executionTime = std::min(
@@ -154,21 +205,17 @@ SchedulingResult Scheduler::RoundRobin(
         // Add newly arrived processes to ready queue
         while (nextProcess < static_cast<int>(processes.size()) &&
                processes[nextProcess].arrivalTime <= currentTime) {
-
+            processes[nextProcess].state = ProcessState::READY;
             readyQueue.push(nextProcess);
             nextProcess++;
         }
 
         // Check if process has completed
         if (process.remainingTime == 0) {
-
             process.state = ProcessState::TERMINATED;
-
             completionTime[index] = currentTime;
             completed++;
-
         } else {
-
             process.state = ProcessState::READY;
             readyQueue.push(index);
         }
@@ -177,25 +224,21 @@ SchedulingResult Scheduler::RoundRobin(
     double totalWaitingTime = 0;
     double totalTurnaroundTime = 0;
 
-    for (int i = 0; i < static_cast<int>(processes.size()); i++) {
-
-        int turnaroundTime =
-            completionTime[i] - processes[i].arrivalTime;
-
-        int waitingTime =
-            turnaroundTime - processes[i].burstTime;
+    for (size_t i = 0; i < processes.size(); i++) {
+        int turnaroundTime = completionTime[i] - processes[i].arrivalTime;
+        int waitingTime = turnaroundTime - processes[i].burstTime;
 
         totalWaitingTime += waitingTime;
         totalTurnaroundTime += turnaroundTime;
     }
 
-    result.averageWaitingTime =
-        totalWaitingTime / processes.size();
-
-    result.averageTurnaroundTime =
-        totalTurnaroundTime / processes.size();
+    if (!processes.empty()) {
+        result.averageWaitingTime = totalWaitingTime / processes.size();
+        result.averageTurnaroundTime = totalTurnaroundTime / processes.size();
+    }
 
     result.totalExecutionTime = currentTime;
+    result.contextSwitches = contextSwitcher.getTotalContextSwitches();
 
     return result;
 }

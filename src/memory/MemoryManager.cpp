@@ -18,6 +18,11 @@ MemoryManager::~MemoryManager() {
 }
 
 bool MemoryManager::accessPage(int pageId, int processId) {
+    if (pageId < 0 || processId < 0) {
+        std::cout << "Invalid memory access: pageId and processId must be non-negative.\n";
+        return false;
+    }
+
     // Page already exists in memory
     if (pageTable.contains(pageId)) {
         stats.pageHits++;

@@ -1,78 +1,55 @@
 #include "process/ContextSwitch.h"
 
-#include <stdexcept>
+#include <iostream>
 
 namespace datacenteros {
 
-ContextSwitcher::ContextSwitcher(uint64_t overhead)
-    : overheadPerSwitch(overhead) {
+ContextSwitch::ContextSwitch(int overhead)
+    : totalContextSwitches(0),
+      contextSwitchTime(overhead) {
 }
 
-void ContextSwitcher::dispatchFirst(
-    int processId,
-    CPUContext& cpu
-) {
-
-    if (currentProcessId != -1) {
-        throw std::logic_error(
-            "A process is already running"
-        );
+void ContextSwitch::switchProcess(PCB& current, PCB& next) {
+    if (current.pid == next.pid) {
+        return;
     }
 
-    currentProcessId = processId;
-
-    auto it = savedContexts.find(processId);
-
-    if (it != savedContexts.end()) {
-        cpu = it->second;
+    // Save current process state if it has not terminated
+    if (current.state != ProcessState::TERMINATED) {
+        current.state = ProcessState::READY;
     }
-    else {
-        cpu = CPUContext{};
-    }
+
+    // Restore next process state
+    next.state = ProcessState::RUNNING;
+
+    // Count context switch
+    totalContextSwitches++;
+
+    std::cout << "[Context Switch] P"
+              << current.pid << " -> P"
+              << next.pid << " (Overhead: "
+              << contextSwitchTime << " unit)\n";
 }
 
-bool ContextSwitcher::switchTo(
-    int nextProcessId,
-    CPUContext& cpu
-) {
-
-    if (currentProcessId == -1) {
-        dispatchFirst(nextProcessId, cpu);
-        return false;
-    }
-
-    if (currentProcessId == nextProcessId) {
-        return false;
-    }
-
-    // Save current process state.
-    savedContexts[currentProcessId] = cpu;
-
-    // Restore next process state.
-    auto it = savedContexts.find(nextProcessId);
-
-    if (it != savedContexts.end()) {
-        cpu = it->second;
-    }
-    else {
-        cpu = CPUContext{};
-    }
-
-    currentProcessId = nextProcessId;
-
-    stats.switchCount++;
-
-    stats.overheadCycles += overheadPerSwitch;
-
-    return true;
+int ContextSwitch::getTotalContextSwitches() const {
+    return totalContextSwitches;
 }
 
-int ContextSwitcher::getCurrentProcess() const {
-    return currentProcessId;
+int ContextSwitch::getContextSwitchTime() const {
+    return contextSwitchTime;
 }
 
-ContextSwitchStats ContextSwitcher::getStats() const {
-    return stats;
+void ContextSwitch::reset() {
+    totalContextSwitches = 0;
+}
+
+void ContextSwitch::displayStats() const {
+    std::cout << "\n========== CONTEXT SWITCH ==========\n";
+    std::cout << "Total Context Switches: "
+              << totalContextSwitches << "\n";
+    std::cout << "Context Switch Overhead: "
+              << contextSwitchTime << "\n";
+    std::cout << "=================================\n";
 }
 
 }

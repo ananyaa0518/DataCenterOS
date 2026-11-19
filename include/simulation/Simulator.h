@@ -3,6 +3,7 @@
 
 #include "process/ProcessManager.h"
 #include "process/Scheduler.h"
+#include "disk/DiskScheduler.h"
 #include "memory/MemoryManager.h"
 #include "filesystem/FileSystem.h"
 #include "synchronization/SynchronizationManager.h"
@@ -15,6 +16,7 @@ class Simulator {
 private:
     ProcessManager processManager;
     Scheduler scheduler;
+    DiskScheduler diskScheduler;
 
     MemoryManager memoryManager;
     FileSystem fileSystem;
@@ -23,6 +25,12 @@ private:
     DeadlockManager resourceManager;
 
     MetricsEngine metricsEngine;
+
+    std::vector<DiskRequest> diskRequests;
+    SchedulingResult lastSchedulingResult;
+    DiskScheduleResult lastDiskResult;
+
+    void displayDiskResult(const DiskScheduleResult& result) const;
 
 public:
     Simulator();
@@ -33,6 +41,22 @@ public:
 
     void displayProcesses();
 
+    void resetProcesses();
+
+    void addDiskRequest(int track, int processId = 0);
+
+    void runDiskFCFS(int initialHead);
+
+    void runDiskSSTF(int initialHead);
+
+    void displayDiskRequests() const;
+
+    void clearDiskRequests();
+
+    void displayMetrics();
+
+    void resetSimulation();
+
     ProcessManager& getProcessManager();
 
     MemoryManager& getMemoryManager();
@@ -42,6 +66,10 @@ public:
     SynchronizationManager& getSynchronizationManager();
 
     DeadlockManager& getResourceManager();
+
+    DiskScheduler& getDiskScheduler();
+
+    MetricsEngine& getMetricsEngine();
 };
 
 }

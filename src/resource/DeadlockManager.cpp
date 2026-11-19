@@ -14,7 +14,7 @@ DeadlockManager::DeadlockManager(int total)
 }
 
 bool DeadlockManager::allocate(int processId, int amount) {
-    if (amount <= 0 || amount > availableResources) {
+    if (processId <= 0 || amount <= 0 || amount > availableResources) {
         return false;
     }
 
@@ -25,10 +25,13 @@ bool DeadlockManager::allocate(int processId, int amount) {
 }
 
 bool DeadlockManager::release(int processId, int amount) {
+    if (processId <= 0 || amount <= 0) {
+        return false;
+    }
+
     auto it = allocatedResources.find(processId);
 
     if (it == allocatedResources.end() ||
-        amount <= 0 ||
         amount > it->second) {
         return false;
     }

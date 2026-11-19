@@ -18,9 +18,12 @@ struct SystemMetrics {
     double averageTurnaroundTime = 0.0;
 
     int totalExecutionTime = 0;
+    double cpuUtilization = 0.0;
+    int contextSwitches = 0;
 
     int pageFaults = 0;
     int pageHits = 0;
+    int pageReplacements = 0;
 
     int diskHeadMovement = 0;
 };

@@ -13,6 +13,7 @@ struct SchedulingResult {
     double averageTurnaroundTime = 0.0;
 
     int totalExecutionTime = 0;
+    int contextSwitches = 0;
 };
 
 class Scheduler {
